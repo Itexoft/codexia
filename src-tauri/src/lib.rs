@@ -26,24 +26,14 @@ use filesystem::{
     git_status::get_git_status,
 };
 use state::CodexState;
+use env_logger::Target;
+use std::fs::OpenOptions;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let ctx = tauri::generate_context!();
+    init_logger(ctx.config().identifier.as_str());
     tauri::Builder::default()
-        .plugin(
-            tauri_plugin_log::Builder::new()
-                .level(if cfg!(debug_assertions) {
-                    log::LevelFilter::Debug
-                } else {
-                    log::LevelFilter::Info
-                })
-                .target(tauri_plugin_log::Target::new(
-                    tauri_plugin_log::TargetKind::LogDir {
-                        file_name: Some("logs".to_string()),
-                    },
-                ))
-                .build()
-        )
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
@@ -88,6 +78,30 @@ pub fn run() {
             delete_profile,
             add_or_update_model_provider,
         ])
-        .run(tauri::generate_context!())
+        .run(ctx)
         .expect("error while running tauri application");
+}
+
+fn init_logger(id: &str) -> std::path::PathBuf {
+    let mut dir = dirs::data_dir().unwrap();
+    dir.push(id);
+    std::fs::create_dir_all(&dir).ok();
+    let path = dir.join("codexia.log");
+    let file = OpenOptions::new().create(true).append(true).open(&path).unwrap();
+    env_logger::Builder::new()
+        .target(Target::Pipe(Box::new(file)))
+        .filter_level(if cfg!(debug_assertions) { log::LevelFilter::Debug } else { log::LevelFilter::Info })
+        .try_init()
+        .ok();
+    path
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn log_file_created() {
+        let path = init_logger("milisp.codexia");
+        assert!(path.exists());
+    }
 }
