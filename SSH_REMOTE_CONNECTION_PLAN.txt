@@ -1,0 +1,139 @@
+# Remote SSH Codex CLI Integration Plan
+
+## 1. Objectives
+- Add capability to run Codex CLI on remote machines accessed through SSH.
+- Allow sessions to target either the local machine or any configured remote host.
+- Provide infrastructure for file operations, command execution, and event streaming over SSH channels.
+
+## 2. Overall Architecture
+- Introduce a transport abstraction that hides details of how Codex CLI is invoked and communicated with.
+- Implement two transport types:
+  - **LocalProcessTransport** for existing local execution using `tokio::process::Command`.
+  - **SshProcessTransport** for remote execution over an SSH channel.
+- Each chat session owns an instance of the selected transport.
+- The frontend selects the target host when creating or editing a session and persists this choice.
+
+## 3. Configuration and Host Management
+- Extend configuration schema to include a list of remote hosts.
+  - Each host record stores `id`, `label`, `hostname`, `port`, `username`, `auth` method, and `defaultWorkdir`.
+  - Authentication supports password, private key path with optional passphrase, or agent forwarding.
+- Provide UI screens for adding, editing, and removing hosts.
+  - Validate connection on save by attempting a simple SSH handshake.
+  - Persist hosts securely; on macOS and Windows use keychain/credential vault APIs, on Linux use `libsecret` or an encrypted file.
+- Store only references to secrets in configuration; actual passwords or keys reside in secure storage.
+- When launching the app, load host definitions and hydrate an in-memory registry.
+
+## 4. Transport Abstraction
+- Define a Rust trait `CodexTransport` with methods:
+  - `async fn start(&mut self, args: &[&str], workdir: &Path) -> Result<()>`
+  - `async fn send(&mut self, data: &str) -> Result<()>`
+  - `async fn recv(&mut self) -> Result<Option<String>>`
+  - `async fn kill(&mut self) -> Result<()>`
+- Implement `LocalProcessTransport` using existing logic from `codex_client.rs`.
+- Implement `SshProcessTransport` using the `openssh` or `ssh2` crate to open an SSH session, create a remote shell channel, and run `codex`.
+- Ensure both transports expose unified error types.
+
+## 5. Session Lifecycle
+- When a session is created, resolve the selected host id.
+- Build the transport instance:
+  - Local host id ⇒ `LocalProcessTransport`.
+  - Remote host id ⇒ `SshProcessTransport` with associated configuration.
+- Call `start` to launch `codex` with proper environment variables and working directory.
+- Spawn two async tasks:
+  - Writer task accepting outbound messages from frontend and sending them through the transport.
+  - Reader task pulling stdout lines from transport and streaming them to frontend.
+- On session termination call `kill` and drop the transport; for remote transports also close SSH channel and connection.
+
+## 6. SSH Connection Details
+- Use `openssh` crate when targeting Unix hosts; this provides native OpenSSH integration and uses user ssh config.
+- For Windows hosts or when `openssh` is unavailable, fallback to `ssh2` crate with manual key handling.
+- Support both password and key-based auth:
+  - For password auth, request password from secure storage when establishing connection.
+  - For key auth, load key file contents and call `userauth_pubkey_file` or `openssh::SessionBuilder::keyfile`.
+- Implement keep-alive messages to prevent long-running sessions from timing out.
+- When connection drops, surface an event to frontend to display reconnection options.
+
+## 7. Remote File Operations
+- Create a file service interface mirroring current local filesystem API.
+- For SSH hosts use SFTP channels for read/write/delete operations.
+- Map existing commands (`read_file`, `write_file`, etc.) to SFTP equivalents.
+- Handle path translation between frontend workspace paths and remote filesystem paths.
+- If SFTP is unavailable, fallback to executing remote shell commands such as `cat` and `mkdir`.
+
+## 8. Command Execution and Sandbox Modes
+- Reuse existing sandbox policy model but enforce it remotely.
+- For sandboxed sessions send commands through remote shell with restricted working directory.
+- Implement optional approval flow for each remote command; approval happens locally before command is transmitted.
+
+## 9. Telemetry and Logging
+- Log all SSH connection attempts, successes, failures, and disconnects.
+- Provide verbose logging when `debug` mode is enabled, including raw SSH channel data when necessary.
+- For supportability store timestamps and host identifiers in the logs.
+
+## 10. Error Handling and Recovery
+- Wrap all transport errors with context (`connection lost`, `authentication failed`, `command not found`).
+- Frontend listens for error events and displays actionable messages.
+- Provide automatic retry mechanism configurable per session.
+- If retries exceed limit, session transitions to `disconnected` state and awaits user action.
+
+## 11. Security Considerations
+- Enforce SSH host key verification and store known hosts.
+- Support optional client-side encryption for configuration at rest.
+- Ensure no secrets are logged.
+- Provide option to disable password authentication entirely for stricter environments.
+
+## 12. Testing Strategy
+- Unit tests for transport trait implementations using mock SSH servers like `russh`.
+- Integration tests spawning a real `sshd` inside CI to run Codex CLI remotely.
+- UI tests verifying host management screens, session creation, and reconnection flows.
+- Manual test plan covering different OS combinations and failure scenarios.
+
+## 13. Migration Plan
+- Step 1: Implement trait abstraction and refactor existing local client to use it.
+- Step 2: Add host configuration backend without UI.
+- Step 3: Implement `SshProcessTransport` and basic remote session prototype.
+- Step 4: Build UI for host management and session host selection.
+- Step 5: Implement file operation layer over SFTP.
+- Step 6: Harden security, logging, and error handling.
+- Step 7: Write tests and documentation.
+- Step 8: Roll out in stages with feature flag for remote sessions.
+
+## 14. Documentation
+- Update README with instructions for adding remote hosts.
+- Provide examples for key and password authentication.
+- Document security best practices and known limitations.
+
+## 15. Future Enhancements
+- Connection pooling for multiple sessions on the same host.
+- Support for bastion hosts and jump boxes via SSH ProxyCommand.
+- Web-based remote access using WebSSH for browsers.
+- Metrics collection for session latency and throughput.
+
+## 16. Cross-Platform Considerations
+- Ensure `openssh` crate works on macOS and Linux; for Windows bundle a minimal SSH client or rely on existing one.
+- Handle line-ending differences when transferring files; normalize to LF for Codex CLI inputs.
+- Provide fallbacks for environments without systemd or launchd when managing background processes.
+
+## 17. Performance Optimization
+- Reuse SSH connections for multiple sessions targeting the same host by pooling channels.
+- Compress SSH traffic using `Compression::zlib` when high latency links are detected.
+- Batch file transfers and command executions during session initialization to reduce round trips.
+- Measure latency and throughput metrics and expose them to the frontend for debugging.
+
+## 18. User Experience Flows
+- On first run, show a guided wizard for adding the first remote host.
+- Display connection status icons in the session sidebar: green for active, yellow for reconnecting, red for disconnected.
+- Allow the user to open a terminal window to the remote host for manual inspection.
+- Provide toast notifications when reconnection attempts succeed or fail.
+
+## 19. Deployment Considerations
+- Include SSH client libraries in the Tauri bundle and document required system packages.
+- For self-updating builds ensure remote host definitions persist across upgrades by storing them in the app data directory.
+- Provide version compatibility checks between Codex CLI versions on local and remote machines.
+
+## 20. Open Questions
+- Should remote file editing mirror changes locally or rely solely on remote storage?
+- How to handle simultaneous edits of the same file across multiple sessions on the same remote host?
+- What policy controls are required for restricting which hosts a user can add in a corporate environment?
+- Is a graphical host browser (like VS Code Remote Explorer) needed in future iterations?
+
