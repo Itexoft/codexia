@@ -27,6 +27,7 @@ use filesystem::{
 };
 use state::CodexState;
 use env_logger::Target;
+use tauri::Manager;
 use std::fs::OpenOptions;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -35,7 +36,7 @@ pub fn run() {
     init_logger(ctx.config().identifier.as_str());
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
-            if let Some(w) = app.get_window("main") {
+            if let Some(w) = app.get_webview_window("main") {
                 let _ = w.set_focus();
             }
         }))
