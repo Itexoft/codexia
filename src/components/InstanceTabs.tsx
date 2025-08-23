@@ -33,7 +33,7 @@ export function InstanceTabs() {
   }
 
   const deleteInstance = (id: string) => {
-    if (window.confirm("Delete this instance and all settings?")) {
+    if (window.confirm("Delete this tab? This will remove all settings.")) {
       void remove(id)
     }
   }

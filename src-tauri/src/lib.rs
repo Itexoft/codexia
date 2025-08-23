@@ -9,15 +9,16 @@ mod utils;
 
 use commands::{
     approve_execution, check_codex_version, close_session, delete_session_file,
-    get_latest_session_id, get_running_sessions, get_session_files, read_session_file, read_history_file,
-    load_sessions_from_disk, pause_session, send_message, start_codex_session, stop_session,
-    test_ssh_connection,
+    get_latest_session_id, get_running_sessions, get_session_files, load_sessions_from_disk,
+    pause_session, read_history_file, read_session_file, send_message, start_codex_session,
+    stop_session, test_ssh_connection,
 };
 use config::{
     add_mcp_server, add_or_update_model_provider, add_or_update_profile, delete_mcp_server,
     delete_profile, get_profile_config, get_project_name, get_provider_config, read_codex_config,
     read_mcp_servers, read_model_providers, read_profiles, update_profile_model,
 };
+use env_logger::Target;
 use filesystem::{
     directory_ops::{get_default_directories, read_directory},
     file_analysis::calculate_file_tokens,
@@ -27,9 +28,8 @@ use filesystem::{
     git_status::get_git_status,
 };
 use state::CodexState;
-use env_logger::Target;
-use tauri::Manager;
 use std::fs::OpenOptions;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -53,12 +53,11 @@ pub fn run() {
                         file_name: Some("logs".to_string()),
                     },
                 ))
-                .build()
+                .build(),
         )
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(CodexState::new())
         .invoke_handler(tauri::generate_handler![
@@ -110,10 +109,18 @@ fn init_logger(id: &str) -> std::path::PathBuf {
     dir.push(id);
     std::fs::create_dir_all(&dir).ok();
     let path = dir.join("codexia.log");
-    let file = OpenOptions::new().create(true).append(true).open(&path).unwrap();
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .unwrap();
     env_logger::Builder::new()
         .target(Target::Pipe(Box::new(file)))
-        .filter_level(if cfg!(debug_assertions) { log::LevelFilter::Debug } else { log::LevelFilter::Info })
+        .filter_level(if cfg!(debug_assertions) {
+            log::LevelFilter::Debug
+        } else {
+            log::LevelFilter::Info
+        })
         .try_init()
         .ok();
     path

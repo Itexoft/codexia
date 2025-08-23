@@ -10,7 +10,6 @@
     "core:window:default",
     "core:webview:default",
     "dialog:default",
-    "shell:default",
     "fs:default",
     "core:path:default",
     "opener:default",
