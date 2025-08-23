@@ -30,6 +30,11 @@ use state::CodexState;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            if let Some(w) = app.get_window("main") {
+                let _ = w.set_focus();
+            }
+        }))
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(if cfg!(debug_assertions) {
@@ -44,6 +49,7 @@ pub fn run() {
                 ))
                 .build()
         )
+        .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
