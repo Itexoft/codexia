@@ -4,37 +4,24 @@ use std::process::Stdio;
 use std::collections::HashMap;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, Command};
+use tokio::process::{Child, Command, ChildStdin, ChildStdout};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::config::{read_model_providers, read_profiles};
 use crate::protocol::{CodexConfig, Event, InputItem, Op, Submission};
-
-// Helper function to extract session_id from codex events
-fn get_session_id_from_event(event: &Event) -> Option<String> {
-    match &event.msg {
-        crate::protocol::EventMsg::SessionConfigured { session_id, .. } => Some(session_id.clone()),
-        _ => None,
-    }
-}
 use crate::utils::codex_discovery::discover_codex_command;
 
-pub struct CodexClient {
-    #[allow(dead_code)]
-    app: AppHandle,
-    session_id: String,
-    process: Option<Child>,
-    stdin_tx: Option<mpsc::UnboundedSender<String>>,
-    #[allow(dead_code)]
-    config: CodexConfig,
+pub struct ProcessHandle {
+    pub child: Child,
+    pub stdin: ChildStdin,
+    pub stdout: ChildStdout,
 }
 
-impl CodexClient {
-    pub async fn new(app: &AppHandle, session_id: String, config: CodexConfig) -> Result<Self> {
-        log::debug!("Creating CodexClient for session: {}", session_id);
+pub struct LocalProcess;
 
-        // Build codex command based on configuration
+impl LocalProcess {
+    pub async fn spawn(config: &CodexConfig) -> Result<ProcessHandle> {
         let (command, args): (String, Vec<String>) =
             if let Some(configured_path) = &config.codex_path {
                 (configured_path.clone(), vec![])
@@ -49,80 +36,49 @@ impl CodexClient {
             cmd.args(&args);
         }
         cmd.arg("proto");
-        
-        // Set up environment variables for API keys
+
         let mut env_vars = HashMap::new();
-        log::debug!("Config provider: {}, API key present: {}", 
-                   config.provider, 
-                   config.api_key.as_ref().map_or(false, |k| !k.is_empty()));
-        
+
         if let Some(api_key) = &config.api_key {
             if !api_key.is_empty() {
-                log::debug!("API key provided, length: {}", api_key.len());
-                // Try to get the env_key from provider configuration first
                 if let Ok(providers) = read_model_providers().await {
-                    log::debug!("Successfully read providers, available: {:?}", providers.keys().collect::<Vec<_>>());
-                    
-                    // Try exact match first, then lowercase match
                     let provider_config = providers.get(&config.provider)
                         .or_else(|| providers.get(&config.provider.to_lowercase()));
-                    
+
                     if let Some(provider_config) = provider_config {
-                        log::debug!("Found provider config: {:?}", provider_config);
                         if !provider_config.env_key.is_empty() {
-                            log::debug!("Setting env var {} from provider config", provider_config.env_key);
                             env_vars.insert(provider_config.env_key.clone(), api_key.clone());
-                        } else {
-                            log::debug!("Provider config has empty env_key");
                         }
-                    } else {
-                        log::debug!("Provider {} not found in config", config.provider);
                     }
                 } else {
-                    log::debug!("Failed to read providers, using fallback mapping");
-                    // Fallback mapping if config reading fails
                     let env_var_name = match config.provider.as_str() {
                         "gemini" => "GEMINI_API_KEY",
-                        "openai" => "OPENAI_API_KEY", 
+                        "openai" => "OPENAI_API_KEY",
                         "openrouter" => "OPENROUTER_API_KEY",
                         "ollama" => "OLLAMA_API_KEY",
-                        _ => "OPENAI_API_KEY", // fallback
+                        _ => "OPENAI_API_KEY",
                     };
-                    log::debug!("Using fallback env var: {}", env_var_name);
                     env_vars.insert(env_var_name.to_string(), api_key.clone());
                 }
-            } else {
-                log::debug!("API key is empty");
             }
-        } else {
-            log::debug!("No API key provided");
         }
 
-        // Load provider configuration from config.toml if provider is specified
         if !config.provider.is_empty() && config.provider != "openai" {
             if let Ok(providers) = read_model_providers().await {
                 if let Ok(profiles) = read_profiles().await {
-                    // Check if there's a matching provider in config (try exact match first, then lowercase)
                     let provider_config = providers.get(&config.provider)
                         .or_else(|| providers.get(&config.provider.to_lowercase()));
-                    
-                    if let Some(provider_config) = provider_config {
-                        // Set model provider based on config
-                        cmd.arg("-c")
-                            .arg(format!("model_provider={}", provider_config.name));
 
-                        // Set base URL if available
+                    if let Some(provider_config) = provider_config {
+                        cmd.arg("-c").arg(format!("model_provider={}", provider_config.name));
+
                         if !provider_config.base_url.is_empty() {
-                            cmd.arg("-c")
-                                .arg(format!("base_url={}", provider_config.base_url));
+                            cmd.arg("-c").arg(format!("base_url={}", provider_config.base_url));
                         }
 
-                        // API key will be provided via environment variable - no need to modify provider config
-
-                        // Use model from profile if available, otherwise from config
                         let profile = profiles.get(&config.provider)
                             .or_else(|| profiles.get(&config.provider.to_lowercase()));
-                        
+
                         let model_to_use = if let Some(profile) = profile {
                             &profile.model
                         } else {
@@ -133,38 +89,29 @@ impl CodexClient {
                             cmd.arg("-c").arg(format!("model={}", model_to_use));
                         }
                     } else {
-                        // Fallback to original logic for custom providers
                         if config.use_oss {
                             cmd.arg("-c").arg("model_provider=oss");
                         } else {
-                            cmd.arg("-c")
-                                .arg(format!("model_provider={}", config.provider));
+                            cmd.arg("-c").arg(format!("model_provider={}", config.provider));
                         }
 
                         if !config.model.is_empty() {
                             cmd.arg("-c").arg(format!("model={}", config.model));
                         }
-
-                        // API key will be provided via environment variable for custom providers
                     }
                 }
             } else {
-                // Fallback to original logic if config reading fails
                 if config.use_oss {
                     cmd.arg("-c").arg("model_provider=oss");
                 } else {
-                    cmd.arg("-c")
-                        .arg(format!("model_provider={}", config.provider));
+                    cmd.arg("-c").arg(format!("model_provider={}", config.provider));
                 }
 
                 if !config.model.is_empty() {
                     cmd.arg("-c").arg(format!("model={}", config.model));
                 }
-
-                // API key will be provided via environment variable
             }
         } else {
-            // Original logic for OSS and default cases
             if config.use_oss {
                 cmd.arg("-c").arg("model_provider=oss");
             }
@@ -172,13 +119,10 @@ impl CodexClient {
             if !config.model.is_empty() {
                 cmd.arg("-c").arg(format!("model={}", config.model));
             }
-
-            // API key will be provided via environment variable for OpenAI
         }
 
         if !config.approval_policy.is_empty() {
-            cmd.arg("-c")
-                .arg(format!("approval_policy={}", config.approval_policy));
+            cmd.arg("-c").arg(format!("approval_policy={}", config.approval_policy));
         }
 
         if !config.sandbox_mode.is_empty() {
@@ -191,92 +135,81 @@ impl CodexClient {
             cmd.arg("-c").arg(sandbox_config);
         }
 
-        // Enable streaming by setting show_raw_agent_reasoning=true
-        // This is required for agent_message_delta events to be generated
         cmd.arg("-c").arg("show_raw_agent_reasoning=true");
 
-        // Set working directory for the process
         if !config.working_directory.is_empty() {
-            log::debug!("working_directory: {:?}", config.working_directory);
             cmd.arg("-c").arg(format!("cwd={}", config.working_directory));
         }
 
-        // Add custom arguments
         if let Some(custom_args) = &config.custom_args {
             for arg in custom_args {
                 cmd.arg(arg);
             }
         }
 
-        // Print the command to be executed for debugging
-        log::debug!("Starting codex with command: {:?}", cmd);
-
-        // Apply environment variables to the command
         for (key, value) in &env_vars {
-            log::debug!("Setting environment variable: {}=***", key);
             cmd.env(key, value);
         }
 
-        let mut process = cmd
+        let mut child = cmd
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .current_dir(&config.working_directory)
             .spawn()?;
 
-        let stdin = process.stdin.take().expect("Failed to open stdin");
-        let stdout = process.stdout.take().expect("Failed to open stdout");
+        let stdin = child.stdin.take().expect("Failed to open stdin");
+        let stdout = child.stdout.take().expect("Failed to open stdout");
+
+        Ok(ProcessHandle { child, stdin, stdout })
+    }
+}
+
+pub struct CodexClient {
+    #[allow(dead_code)]
+    app: AppHandle,
+    session_id: String,
+    process: Option<Child>,
+    stdin_tx: Option<mpsc::UnboundedSender<String>>,
+    #[allow(dead_code)]
+    config: CodexConfig,
+}
+
+impl CodexClient {
+    pub async fn new(app: &AppHandle, session_id: String, config: CodexConfig, handle: ProcessHandle) -> Result<Self> {
+        log::debug!("Creating CodexClient for session: {}", session_id);
+
+        let process = handle.child;
+        let stdin = handle.stdin;
+        let stdout = handle.stdout;
 
         let (stdin_tx, mut stdin_rx) = mpsc::unbounded_channel::<String>();
 
-        // Handle stdin writing
         let mut stdin_writer = stdin;
         tokio::spawn(async move {
             while let Some(line) = stdin_rx.recv().await {
-                if let Err(e) = stdin_writer.write_all(line.as_bytes()).await {
-                    log::error!("Failed to write to codex stdin: {}", e);
+                if stdin_writer.write_all(line.as_bytes()).await.is_err() {
                     break;
                 }
-                if let Err(e) = stdin_writer.write_all(b"\n").await {
-                    log::error!("Failed to write newline to codex stdin: {}", e);
+                if stdin_writer.write_all(b"\n").await.is_err() {
                     break;
                 }
-                if let Err(e) = stdin_writer.flush().await {
-                    log::error!("Failed to flush codex stdin: {}", e);
+                if stdin_writer.flush().await.is_err() {
                     break;
                 }
             }
-            log::debug!("Stdin writer task terminated");
         });
 
-        // Handle stdout reading
         let app_clone = app.clone();
-        let session_id_clone = session_id.clone();
         tokio::spawn(async move {
             let reader = BufReader::new(stdout);
             let mut lines = reader.lines();
 
-            log::debug!("Starting stdout reader for session: {}", session_id_clone);
-
             while let Ok(Some(line)) = lines.next_line().await {
-                // log::debug!("Received line from codex: {}", line);
                 if let Ok(event) = serde_json::from_str::<Event>(&line) {
-                    // log::debug!("Parsed event: {:?}", event);
-
-                    // Log the event for debugging
-                    if let Some(event_session_id) = get_session_id_from_event(&event) {
-                        log::debug!("Event for session: {}", event_session_id);
-                    }
-
-                    // Use a single global event channel instead of per-session channels
-                    if let Err(e) = app_clone.emit("codex-events", &event) {
-                        log::error!("Failed to emit event: {}", e);
-                    }
-                } else {
-                    log::warn!("Failed to parse codex event: {}", line);
+                    let _ = app_clone.emit("codex-events", &event);
                 }
             }
-            log::debug!("Stdout reader terminated for session: {}", session_id_clone);
         });
 
         let client = Self {

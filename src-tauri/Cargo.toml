@@ -38,3 +38,6 @@ toml = "0.9.5"
 tauri-plugin-fs = "2"
 walkdir = "2.3"
 chrono = { version = "0.4", features = ["serde"] }
+tauri-plugin-log = "2"
+tauri-plugin-store = "2"
+tauri-plugin-single-instance = "2"

@@ -1,5 +1,6 @@
-use crate::codex_client::CodexClient;
+use crate::codex_client::{CodexClient, LocalProcess};
 use crate::protocol::CodexConfig;
+use super::ssh::SshProcess;
 use crate::state::CodexState;
 use crate::utils::codex_discovery::discover_codex_command;
 use std::process::Command;
@@ -21,7 +22,20 @@ pub async fn start_codex_session(
             return Ok(());
         }
     }
-    let codex_client = CodexClient::new(&app, session_id.clone(), config)
+    let handle = if config
+        .connection
+        .as_ref()
+        .map(|c| c.connection_type.as_str() == "ssh")
+        .unwrap_or(false)
+    {
+        SshProcess::spawn(&config).map_err(|e| format!("Failed to start Codex session: {}", e))?
+    } else {
+        LocalProcess::spawn(&config)
+            .await
+            .map_err(|e| format!("Failed to start Codex session: {}", e))?
+    };
+
+    let codex_client = CodexClient::new(&app, session_id.clone(), config, handle)
         .await
         .map_err(|e| {
             log::error!("error {} {}", session_id, e);

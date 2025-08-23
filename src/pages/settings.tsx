@@ -1,9 +1,11 @@
 // app/settings/page.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Provider, useSettingsStore } from "@/stores/SettingsStore";
+import { appDataDir } from "@tauri-apps/api/path";
+import { Store } from "@tauri-apps/plugin-store";
 
 export default function SettingsPage() {
   const {
@@ -17,6 +19,14 @@ export default function SettingsPage() {
   const [newModelName, setNewModelName] = useState("");
   const [editingModelIdx, setEditingModelIdx] = useState<number | null>(null);
   const [editingModelValue, setEditingModelValue] = useState("");
+  const [dataDir, setDataDir] = useState("");
+  useEffect(() => {
+    appDataDir().then(async (dir) => {
+      setDataDir(dir);
+      const store = await Store.load("instances.store");
+      await store.save();
+    });
+  }, []);
   const providerNames = [
     "openai",
     "gemini",
@@ -229,6 +239,7 @@ export default function SettingsPage() {
         )}
         {activeSection === "security" && <p>Security Settings</p>}
         {activeSection === "working" && <p>Working Directory Settings</p>}
+        <p className="mt-4 text-xs break-all">{dataDir}</p>
       </div>
     </div>
   );
