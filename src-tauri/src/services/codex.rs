@@ -15,16 +15,13 @@ pub async fn start_codex_session(
     session_id: String,
     config: CodexConfig,
 ) -> Result<(), String> {
-    log::debug!("Starting session with ID: {}", session_id);
-
+    log::info!("start {}", session_id);
     {
         let sessions = state.sessions.lock().await;
         if sessions.contains_key(&session_id) {
-            log::debug!("Session {} already exists, skipping", session_id);
             return Ok(());
         }
     }
-
     let handle = if config
         .connection
         .as_ref()
@@ -40,15 +37,15 @@ pub async fn start_codex_session(
 
     let codex_client = CodexClient::new(&app, session_id.clone(), config, handle)
         .await
-        .map_err(|e| format!("Failed to start Codex session: {}", e))?;
-
+        .map_err(|e| {
+            log::error!("error {} {}", session_id, e);
+            format!("Failed to start Codex session: {}", e)
+        })?;
     {
         let mut sessions = state.sessions.lock().await;
         sessions.insert(session_id.clone(), codex_client);
-        log::debug!("Session {} stored successfully", session_id);
-        log::debug!("Total sessions now: {}", sessions.len());
-        log::debug!("All session keys: {:?}", sessions.keys().collect::<Vec<_>>());
     }
+    log::info!("ok {}", session_id);
     Ok(())
 }
 
@@ -89,40 +86,26 @@ pub async fn approve_execution(
 
 pub async fn stop_session(state: State<'_, CodexState>, session_id: String) -> Result<(), String> {
     let sessions = state.sessions.lock().await;
-    let stored_sessions: Vec<String> = sessions.keys().cloned().collect();
-
-    log::debug!("Attempting to interrupt session: {}", session_id);
-    log::debug!("Currently stored sessions: {:?}", stored_sessions);
-
     if let Some(client) = sessions.get(&session_id) {
-        log::debug!("Found session, sending interrupt: {}", session_id);
         client
             .interrupt()
             .await
             .map_err(|e| format!("Failed to interrupt session: {}", e))?;
         Ok(())
     } else {
-        log::debug!("Session not found: {}", session_id);
         Err("Session not found".to_string())
     }
 }
 
 pub async fn pause_session(state: State<'_, CodexState>, session_id: String) -> Result<(), String> {
     let sessions = state.sessions.lock().await;
-    let stored_sessions: Vec<String> = sessions.keys().cloned().collect();
-
-    log::debug!("Attempting to pause session: {}", session_id);
-    log::debug!("Currently stored sessions: {:?}", stored_sessions);
-
     if let Some(client) = sessions.get(&session_id) {
-        log::debug!("Found session, sending interrupt (pause): {}", session_id);
         client
             .interrupt()
             .await
             .map_err(|e| format!("Failed to pause session: {}", e))?;
         Ok(())
     } else {
-        log::debug!("Session not found: {}", session_id);
         Err("Session not found".to_string())
     }
 }
@@ -133,7 +116,11 @@ pub async fn close_session(state: State<'_, CodexState>, session_id: String) -> 
         client
             .close_session()
             .await
-            .map_err(|e| format!("Failed to close session: {}", e))?;
+            .map_err(|e| {
+                log::error!("error {} {}", session_id, e);
+                format!("Failed to close session: {}", e)
+            })?;
+        log::info!("disconnect {}", session_id);
         Ok(())
     } else {
         Err("Session not found".to_string())
@@ -143,10 +130,6 @@ pub async fn close_session(state: State<'_, CodexState>, session_id: String) -> 
 pub async fn get_running_sessions(state: State<'_, CodexState>) -> Result<Vec<String>, String> {
     let sessions = state.sessions.lock().await;
     let session_keys: Vec<String> = sessions.keys().cloned().collect();
-
-    // Debug log to see what sessions are actually stored
-    log::debug!("get_running_sessions called - stored sessions: {:?}", session_keys);
-
     Ok(session_keys)
 }
 
