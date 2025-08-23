@@ -12,6 +12,9 @@
     "dialog:default",
     "shell:default",
     "fs:default",
-    "log:default"
+    "log:default",
+    "path:default",
+    "store:default",
+    "single-instance:default"
   ]
 }
