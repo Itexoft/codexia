@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Provider, useSettingsStore } from "@/stores/SettingsStore";
 import { appDataDir } from "@tauri-apps/api/path";
-import { open } from "@tauri-apps/plugin-opener";
+import { openPath } from "@tauri-apps/plugin-opener";
 import { Store } from "@tauri-apps/plugin-store";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -30,16 +30,16 @@ export default function SettingsPage() {
   const [dataDir, setDataDir] = useState("");
   useEffect(() => {
     appDataDir().then(async dir => {
-      setDataDir(dir);
+      setDataDir(dir)
       try {
-        const store = await Store.load("instances.store");
-        await store.save();
-      } catch (_) {
-        const store = new Store("instances.store");
-        await store.save();
+        const store = await Store.load("instances.store")
+        await store.save()
+      } catch {
+        const store = await Store.load("instances.store", { defaults: {}, createNew: true })
+        await store.save()
       }
-    });
-  }, []);
+    })
+  }, [])
   const providerNames = [
     "openai",
     "gemini",
@@ -322,7 +322,7 @@ export default function SettingsPage() {
           <Button
             size="sm"
             onClick={() => {
-              open(dataDir);
+              openPath(dataDir);
             }}
           >
             Open

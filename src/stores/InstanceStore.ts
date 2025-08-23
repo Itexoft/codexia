@@ -22,17 +22,19 @@ interface InstanceState {
   setActive: (id: string) => Promise<void>
 }
 
-const store = new Store("instances.store")
+const storePromise = Store.load("instances.store").catch(() => Store.load("instances.store", { defaults: {}, createNew: true }))
 
 export const useInstanceStore = create<InstanceState>((set, get) => ({
   instances: [],
   activeId: null,
   load: async () => {
+    const store = await storePromise
     const instances = (await store.get<Instance[]>("instances")) || []
     const activeId = (await store.get<string>("activeId")) || null
     set({ instances, activeId })
   },
   add: async (inst: Instance) => {
+    const store = await storePromise
     const instances = [...get().instances, inst]
     await store.set("instances", instances)
     await store.set("activeId", inst.id)
@@ -40,12 +42,14 @@ export const useInstanceStore = create<InstanceState>((set, get) => ({
     set({ instances, activeId: inst.id })
   },
   rename: async (id, name) => {
+    const store = await storePromise
     const instances = get().instances.map(i => i.id === id ? { ...i, name } : i)
     await store.set("instances", instances)
     await store.save()
     set({ instances })
   },
   remove: async id => {
+    const store = await storePromise
     const instances = get().instances.filter(i => i.id !== id)
     let activeId = get().activeId
     if (activeId === id) activeId = instances.length ? instances[0].id : null
@@ -55,6 +59,7 @@ export const useInstanceStore = create<InstanceState>((set, get) => ({
     set({ instances, activeId })
   },
   setActive: async id => {
+    const store = await storePromise
     await store.set("activeId", id)
     await store.save()
     set({ activeId: id })
