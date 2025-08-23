@@ -1,5 +1,5 @@
-use crate::protocol::CodexConfig;
-use crate::services::{codex, session};
+use crate::protocol::{CodexConfig, ConnectionConfig};
+use crate::services::{codex, session, ssh};
 use crate::state::CodexState;
 use tauri::{AppHandle, State};
 use std::fs;
@@ -65,6 +65,13 @@ pub async fn get_running_sessions(state: State<'_, CodexState>) -> Result<Vec<St
 #[tauri::command]
 pub async fn check_codex_version() -> Result<String, String> {
     codex::check_codex_version().await
+}
+
+#[tauri::command]
+pub async fn test_ssh_connection(conn: ConnectionConfig) -> Result<String, String> {
+    ssh::SshProcess::test_connection(&conn)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

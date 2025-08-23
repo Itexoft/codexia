@@ -8,16 +8,17 @@ interface FormData {
   host: string
   port: string
   username: string
+  keyPath: string
 }
 
 interface CreateInstanceDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onCreate: (data: { name: string; type: "local" | "ssh"; host?: string; port?: number; username?: string }) => void
+  onCreate: (data: { name: string; type: "local" | "ssh"; host?: string; port?: number; username?: string; keyPath?: string }) => void
 }
 
 export function CreateInstanceDialog({ open, onOpenChange, onCreate }: CreateInstanceDialogProps) {
-  const [form, setForm] = useState<FormData>({ name: "", host: "", port: "22", username: "" })
+  const [form, setForm] = useState<FormData>({ name: "", host: "", port: "22", username: "", keyPath: "" })
 
   const handleChange = (field: keyof FormData, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -30,9 +31,10 @@ export function CreateInstanceDialog({ open, onOpenChange, onCreate }: CreateIns
       type,
       host: form.host || undefined,
       port: form.host ? Number(form.port) : undefined,
-      username: form.host ? form.username : undefined
+      username: form.host ? form.username : undefined,
+      keyPath: form.host ? form.keyPath : undefined
     })
-    setForm({ name: "", host: "", port: "22", username: "" })
+    setForm({ name: "", host: "", port: "22", username: "", keyPath: "" })
     onOpenChange(false)
   }
 
@@ -47,6 +49,7 @@ export function CreateInstanceDialog({ open, onOpenChange, onCreate }: CreateIns
           <Input placeholder="Host" value={form.host} onChange={e => handleChange("host", e.target.value)} />
           <Input placeholder="Port" value={form.port} onChange={e => handleChange("port", e.target.value)} />
           <Input placeholder="Username" value={form.username} onChange={e => handleChange("username", e.target.value)} />
+          <Input placeholder="Key Path" value={form.keyPath} onChange={e => handleChange("keyPath", e.target.value)} />
         </div>
         <div className="flex justify-end gap-2 pt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>

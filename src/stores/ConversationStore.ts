@@ -16,8 +16,8 @@ interface ConversationStore {
   pendingNewConversation: boolean;
 
   // Conversation management
-  createConversation: (title?: string, mode?: ChatMode, sessionId?: string) => string;
-  createConversationWithLatestSession: (title?: string, mode?: ChatMode) => Promise<string>;
+  createConversation: (title?: string, mode?: ChatMode, sessionId?: string, instanceId?: string) => string;
+  createConversationWithLatestSession: (title?: string, mode?: ChatMode, instanceId?: string) => Promise<string>;
   selectHistoryConversation: (conversation: Conversation) => void;
   deleteConversation: (id: string) => void;
   setCurrentConversation: (id: string) => void;
@@ -52,12 +52,12 @@ const generateTitle = (messages: ChatMessage[]): string => {
 };
 
 // Export function to create conversation with latest running session or create new one
-export const createConversationWithLatestSession = async (title?: string, mode: ChatMode = "agent"): Promise<string> => {
+export const createConversationWithLatestSession = async (title?: string, mode: ChatMode = "agent", instanceId?: string): Promise<string> => {
   const store = useConversationStore.getState();
-  
+
   // Always create a new conversation with timestamp format for consistency
   // This prevents UUID session IDs from being used
-  return store.createConversation(title, mode);
+  return store.createConversation(title, mode, undefined, instanceId);
 };
 
 export const useConversationStore = create<ConversationStore>()(
@@ -76,7 +76,7 @@ export const useConversationStore = create<ConversationStore>()(
         set({ config });
       },
 
-      createConversation: (title?: string, mode: ChatMode = "agent", sessionId?: string) => {
+      createConversation: (title?: string, mode: ChatMode = "agent", sessionId?: string, instanceId?: string) => {
         // Use provided sessionId or generate a codex-event-{uuid} format for the conversation
         const id = sessionId || `codex-event-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         const state = get();
@@ -98,6 +98,7 @@ export const useConversationStore = create<ConversationStore>()(
           createdAt: now,
           updatedAt: now,
           isFavorite: false,
+          instanceId,
         };
 
         set((state) => ({

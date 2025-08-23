@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { ChatInterface } from "./chat/ChatInterface";
 import { ConversationTabs } from "./chat/ConversationTabs";
 import { useConversationStore } from "@/stores/ConversationStore";
 import { useLayoutStore } from "@/stores/layoutStore";
+import { useInstanceStore } from "@/stores/InstanceStore";
 import { sessionManager } from "@/services/sessionManager";
 import { sessionLoader } from "@/services/sessionLoader";
 import type { Conversation } from "@/types/chat";
@@ -17,9 +18,7 @@ export const ChatView: React.FC = () => {
     favorites: "",
     sessions: ""
   });
-  const [historyConversations, setHistoryConversations] = useState<
-    Conversation[]
-  >([]);
+  const [historyConversations, setHistoryConversations] = useState<Conversation[]>([]);
   const [favoriteStatuses, setFavoriteStatuses] = useState<
     Record<string, boolean>
   >({});
@@ -27,7 +26,7 @@ export const ChatView: React.FC = () => {
   const {
     config,
     currentConversationId,
-    conversations: activeConversations,
+    conversations: allConversations,
     createConversationWithLatestSession,
     selectHistoryConversation,
     deleteConversation,
@@ -35,6 +34,7 @@ export const ChatView: React.FC = () => {
     pendingNewConversation,
   } = useConversationStore();
   const { showSessionList, conversationListTab } = useLayoutStore();
+  const { activeId } = useInstanceStore();
 
   // Don't auto-switch tabs to prevent unwanted tab changes when favoriting/deleting conversations
   // Users can manually switch tabs as needed
@@ -50,12 +50,12 @@ export const ChatView: React.FC = () => {
   useEffect(() => {
     if (currentConversationId && currentConversationId.startsWith('codex-event-')) {
       // Check if this is a new conversation (no messages)
-      const currentConv = activeConversations.find(conv => conv.id === currentConversationId);
+      const currentConv = allConversations.find(conv => conv.id === currentConversationId);
       if (currentConv && currentConv.messages.length === 0) {
         setSelectedConversation(null);
       }
     }
-  }, [currentConversationId, activeConversations]);
+  }, [currentConversationId, allConversations]);
 
   const loadHistory = async () => {
     try {
@@ -78,10 +78,13 @@ export const ChatView: React.FC = () => {
     loadHistory();
   }, []);
 
+  const activeConversations = useMemo(() => allConversations.filter(c => !activeId || c.instanceId === activeId), [allConversations, activeId]);
+  const filteredHistory = useMemo(() => historyConversations.filter(c => !activeId || c.instanceId === activeId), [historyConversations, activeId]);
+
   // Handle creating new conversation with latest session
   const handleCreateNewConversation = async () => {
     try {
-      await createConversationWithLatestSession();
+      await createConversationWithLatestSession(undefined, "agent", activeId || undefined);
     } catch (error) {
       console.error("Failed to create new conversation:", error);
     }
@@ -188,13 +191,13 @@ export const ChatView: React.FC = () => {
             <DebugInfo
               conversationListTab={conversationListTab}
               currentConversationId={currentConversationId}
-              historyConversationsCount={historyConversations.length}
+              historyConversationsCount={filteredHistory.length}
               activeConversationsCount={activeConversations.length}
               searchQueries={searchQueries}
             />
 
             <ConversationTabs
-              historyConversations={historyConversations}
+              historyConversations={filteredHistory}
               favoriteStatuses={favoriteStatuses}
               activeConversations={activeConversations}
               currentConversationId={currentConversationId}

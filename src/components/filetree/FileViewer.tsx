@@ -6,6 +6,7 @@ import { CodeEditor } from "./CodeEditor";
 import { DiffViewer } from "./DiffViewer";
 import { useEditorStore } from "@/stores/EditorStore";
 import { useConversationStore } from "@/stores/ConversationStore";
+import { useInstanceStore } from "@/stores/InstanceStore";
 
 interface FileViewerProps {
   filePath: string | null;
@@ -32,6 +33,7 @@ export function FileViewer({ filePath, onClose, addToNotepad }: FileViewerProps)
   const [diffLoading, setDiffLoading] = useState(false);
   const { isDarkTheme, setIsDarkTheme } = useEditorStore();
   const { createConversation, addMessage, currentConversationId } = useConversationStore();
+  const { activeId } = useInstanceStore();
 
   const getFileName = () => {
     if (!filePath) return "";
@@ -165,7 +167,7 @@ export function FileViewer({ filePath, onClose, addToNotepad }: FileViewerProps)
       
       let conversationId = currentConversationId;
       if (!conversationId) {
-        conversationId = createConversation();
+        conversationId = createConversation(undefined, "agent", undefined, activeId || undefined);
       }
       
       addMessage(conversationId, {

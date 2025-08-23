@@ -2,6 +2,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { CodexConfig } from '@/types/codex';
 import { useFolderStore } from '@/stores/FolderStore';
 import { useSettingsStore } from '@/stores/SettingsStore';
+import { useInstanceStore } from '@/stores/InstanceStore';
+import { useConversationStore } from '@/stores/ConversationStore';
 
 class SessionManager {
   private sessionConfigs: Map<string, CodexConfig> = new Map();
@@ -38,22 +40,35 @@ class SessionManager {
       const settingsStore = useSettingsStore.getState();
       const providerConfig = settingsStore.providers[config.provider as keyof typeof settingsStore.providers];
       const apiKey = providerConfig?.apiKey || null;
-      
+
       console.log(`🔑 API key debug - Provider: ${config.provider}, Has API key: ${!!apiKey}, Length: ${apiKey?.length || 0}`);
 
-      // Start the session (backend will check if already exists)
+      const conv = useConversationStore.getState().conversations.find(c => c.id === sessionId);
+      const inst = conv ? useInstanceStore.getState().instances.find(i => i.id === conv.instanceId) : undefined;
+      let connection: any = undefined;
+      if (inst && inst.type === 'ssh') {
+        connection = {
+          type: 'ssh',
+          host: inst.host || '',
+          user: inst.username || '',
+          port: inst.port,
+          keyPath: inst.keyPath,
+        };
+      }
+      const cfg: any = {
+        working_directory: currentFolder,
+        model: config.model,
+        provider: config.provider,
+        use_oss: config.useOss,
+        custom_args: config.customArgs || null,
+        approval_policy: config.approvalPolicy,
+        sandbox_mode: config.sandboxMode,
+        api_key: apiKey,
+      };
+      if (connection) cfg.connection = connection;
       await invoke('start_codex_session', {
         sessionId: rawSessionId,
-        config: {
-          working_directory: currentFolder,
-          model: config.model,
-          provider: config.provider,
-          use_oss: config.useOss,
-          custom_args: config.customArgs || null,
-          approval_policy: config.approvalPolicy,
-          sandbox_mode: config.sandboxMode,
-          api_key: apiKey,
-        },
+        config: cfg,
       });
 
       this.runningSessions.add(sessionId);

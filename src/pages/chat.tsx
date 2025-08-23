@@ -10,6 +10,7 @@ import { useState } from "react";
 import { ConfigDialog } from "@/components/dialogs/ConfigDialog";
 import { AppToolbar } from "@/components/layout/AppToolbar";
 import { useConversationStore } from "@/stores/ConversationStore";
+import { useInstanceStore } from "@/stores/InstanceStore";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { invoke } from "@tauri-apps/api/core";
 import { GitBranch } from "lucide-react";
@@ -30,6 +31,7 @@ export default function ChatPage() {
     setConfig,
     createConversationWithLatestSession,
   } = useConversationStore();
+  const { activeId } = useInstanceStore();
 
   const { currentFolder } = useFolderStore();
   const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -131,7 +133,7 @@ export default function ChatPage() {
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
           <AppToolbar
             onOpenConfig={() => setIsConfigOpen(true)}
-            onCreateNewSession={createConversationWithLatestSession}
+            onCreateNewSession={() => createConversationWithLatestSession(undefined, "agent", activeId || undefined)}
           />
           {activeTab === "chat" ? (
             <ChatView />
