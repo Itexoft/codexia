@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { ChatMessage, CodexEvent, ApprovalRequest } from '@/types/codex';
 import { useConversationStore } from '../stores/ConversationStore';
+import { useInstanceStore } from '../stores/InstanceStore';
 import { StreamController, StreamControllerSink } from '@/utils/streamController';
 
 interface UseCodexEventsProps {
@@ -25,6 +26,7 @@ export const useCodexEvents = ({
   onApprovalRequest
 }: UseCodexEventsProps) => {
   const { addMessage, updateMessage, setSessionLoading, createConversation, conversations } = useConversationStore();
+  const { activeId } = useInstanceStore();
   const streamController = useRef<StreamController>(new StreamController());
   const currentStreamingMessageId = useRef<string | null>(null);
 
@@ -33,7 +35,7 @@ export const useCodexEvents = ({
     const conversationExists = conversations.find(conv => conv.id === sessionId);
     if (!conversationExists) {
       console.log(`Creating conversation for session ${sessionId} from event`);
-      createConversation('New Chat', 'agent', sessionId);
+      createConversation('New Chat', 'agent', sessionId, activeId || undefined);
     }
     
     // Convert message format and add to store

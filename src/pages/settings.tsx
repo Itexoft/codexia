@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Provider, useSettingsStore } from "@/stores/SettingsStore";
 import { appDataDir } from "@tauri-apps/api/path";
+import { openPath } from "@tauri-apps/plugin-opener";
 import { Store } from "@tauri-apps/plugin-store";
+import { invoke } from "@tauri-apps/api/core";
 
 export default function SettingsPage() {
   const {
@@ -19,14 +21,25 @@ export default function SettingsPage() {
   const [newModelName, setNewModelName] = useState("");
   const [editingModelIdx, setEditingModelIdx] = useState<number | null>(null);
   const [editingModelValue, setEditingModelValue] = useState("");
+  const [sshEnabled, setSshEnabled] = useState(false);
+  const [sshHost, setSshHost] = useState("");
+  const [sshPort, setSshPort] = useState("");
+  const [sshUser, setSshUser] = useState("");
+  const [sshKeyPath, setSshKeyPath] = useState("");
+  const [sshTest, setSshTest] = useState("");
   const [dataDir, setDataDir] = useState("");
   useEffect(() => {
-    appDataDir().then(async (dir) => {
-      setDataDir(dir);
-      const store = await Store.load("instances.store");
-      await store.save();
-    });
-  }, []);
+    appDataDir().then(async dir => {
+      setDataDir(dir)
+      try {
+        const store = await Store.load("instances.store")
+        await store.save()
+      } catch {
+        const store = await Store.load("instances.store", { defaults: {}, createNew: true })
+        await store.save()
+      }
+    })
+  }, [])
   const providerNames = [
     "openai",
     "gemini",
@@ -58,6 +71,13 @@ export default function SettingsPage() {
           onClick={() => setActiveSection("working")}
         >
           Working Directory
+        </Button>
+        <Button
+          variant={activeSection === "ssh" ? "default" : "ghost"}
+          className="w-full justify-start"
+          onClick={() => setActiveSection("ssh")}
+        >
+          SSH
         </Button>
       </div>
 
@@ -239,7 +259,75 @@ export default function SettingsPage() {
         )}
         {activeSection === "security" && <p>Security Settings</p>}
         {activeSection === "working" && <p>Working Directory Settings</p>}
-        <p className="mt-4 text-xs break-all">{dataDir}</p>
+        {activeSection === "ssh" && (
+          <Card className="max-w-md">
+            <CardContent className="p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={sshEnabled}
+                  onChange={(e) => setSshEnabled(e.target.checked)}
+                />
+                <span>Enable</span>
+              </div>
+              {sshEnabled && (
+                <>
+                  <div className="mb-2">
+                    <label className="block mb-1 font-medium">Host</label>
+                    <Input value={sshHost} onChange={(e) => setSshHost(e.target.value)} />
+                  </div>
+                  <div className="mb-2">
+                    <label className="block mb-1 font-medium">Port</label>
+                    <Input value={sshPort} onChange={(e) => setSshPort(e.target.value)} />
+                  </div>
+                  <div className="mb-2">
+                    <label className="block mb-1 font-medium">User</label>
+                    <Input value={sshUser} onChange={(e) => setSshUser(e.target.value)} />
+                  </div>
+                  <div className="mb-4">
+                    <label className="block mb-1 font-medium">Key Path</label>
+                    <Input value={sshKeyPath} onChange={(e) => setSshKeyPath(e.target.value)} />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={async () => {
+                        setSshTest("...");
+                        try {
+                          const res = await invoke<string>("test_ssh_connection", {
+                            conn: {
+                              type: "ssh",
+                              host: sshHost,
+                              user: sshUser,
+                              port: sshPort ? Number(sshPort) : undefined,
+                              keyPath: sshKeyPath,
+                            },
+                          });
+                          setSshTest(res);
+                        } catch (e) {
+                          setSshTest(String(e));
+                        }
+                      }}
+                    >
+                      Test Connection
+                    </Button>
+                    {sshTest && <span className="text-sm">{sshTest}</span>}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
+        <div className="mt-4 text-xs break-all flex items-center gap-2">
+          <span>{dataDir}</span>
+          <Button
+            size="sm"
+            onClick={() => {
+              openPath(dataDir);
+            }}
+          >
+            Open
+          </Button>
+        </div>
       </div>
     </div>
   );

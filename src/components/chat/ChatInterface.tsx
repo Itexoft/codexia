@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { ApprovalRequest, CodexConfig } from "@/types/codex";
 import type { Conversation } from "@/types/chat";
 import { useConversationStore } from "../../stores/ConversationStore";
+import { useInstanceStore } from "../../stores/InstanceStore";
 import { useChatInputStore } from "../../stores/chatInputStore";
 import { useModelStore } from "../../stores/ModelStore";
 import { sessionManager } from "@/services/sessionManager";
@@ -52,6 +53,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setPendingNewConversation,
     setCurrentConversation,
   } = useConversationStore();
+  const { activeId } = useInstanceStore();
 
   // Simplified: Use session_id to find conversation data
   // Priority: selectedConversation (from disk/history) > conversations (from store)
@@ -219,7 +221,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       if (!conversationExists) {
         // Always use timestamp format for consistency
         actualSessionId = `codex-event-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        createConversation("New Chat", "agent", actualSessionId);
+        createConversation("New Chat", "agent", actualSessionId, activeId || undefined);
       }
     }
 
@@ -239,7 +241,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         setIsConnected(true);
         
         if (isPendingSession) {
-          createConversation("New Chat", "agent", actualSessionId);
+          createConversation("New Chat", "agent", actualSessionId, activeId || undefined);
           setCurrentConversation(actualSessionId);
           setActiveSessionId(actualSessionId);
           setTempSessionId(null);

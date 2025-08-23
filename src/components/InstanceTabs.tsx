@@ -1,37 +1,30 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem } from "@/components/ui/context-menu"
 import { Monitor, Server, Check, X, Loader2, Plus } from "lucide-react"
 import { CreateInstanceDialog } from "./dialogs/CreateInstanceDialog"
-
-interface Instance {
-  id: string
-  name: string
-  type: "local" | "ssh"
-  status: "ready" | "error" | "connecting"
-  host?: string
-  port?: number
-  username?: string
-}
+import { useInstanceStore, Instance } from "@/stores/InstanceStore"
 
 export function InstanceTabs() {
-  const [instances, setInstances] = useState<Instance[]>([])
-  const [active, setActive] = useState<string | null>(null)
+  const { instances, activeId, add, rename, remove, setActive, load } = useInstanceStore()
   const [dialogOpen, setDialogOpen] = useState(false)
 
-  const addInstance = (data: { name: string; type: "local" | "ssh"; host?: string; port?: number; username?: string }) => {
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const addInstance = (data: { name: string; type: "local" | "ssh"; host?: string; port?: number; username?: string; keyPath?: string }) => {
     const id = Math.random().toString(36).slice(2)
     const instance: Instance = { id, status: "ready", ...data }
-    setInstances(prev => [...prev, instance])
-    setActive(id)
+    void add(instance)
   }
 
   const renameInstance = (id: string) => {
     const inst = instances.find(i => i.id === id)
     if (!inst) return
     const name = window.prompt("Rename instance", inst.name)
-    if (name) setInstances(prev => prev.map(i => i.id === id ? { ...i, name } : i))
+    if (name) void rename(id, name)
   }
 
   const settingsInstance = (id: string) => {
@@ -40,9 +33,8 @@ export function InstanceTabs() {
   }
 
   const deleteInstance = (id: string) => {
-    if (window.confirm("Delete instance?")) {
-      setInstances(prev => prev.filter(i => i.id !== id))
-      if (active === id) setActive(null)
+    if (window.confirm("Delete this instance and all settings?")) {
+      void remove(id)
     }
   }
 
@@ -58,7 +50,7 @@ export function InstanceTabs() {
 
   return (
     <>
-      <Tabs value={active || undefined} onValueChange={setActive} className="flex">
+      <Tabs value={activeId || undefined} onValueChange={id => void setActive(id)} className="flex">
         <TabsList className="flex items-center gap-2">
           {instances.map(inst => (
             <ContextMenu key={inst.id}>

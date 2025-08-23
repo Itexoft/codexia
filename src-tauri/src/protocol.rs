@@ -129,6 +129,7 @@ pub enum EventMsg {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConnectionConfig {
     #[serde(rename = "type")]
     pub connection_type: String,
@@ -136,6 +137,10 @@ pub struct ConnectionConfig {
     pub host: String,
     #[serde(default)]
     pub user: String,
+    #[serde(default)]
+    pub port: Option<u16>,
+    #[serde(default)]
+    pub key_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

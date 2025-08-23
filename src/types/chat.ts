@@ -21,6 +21,7 @@ export interface Conversation {
   isFavorite?: boolean;
   filePath?: string;
   isLoading?: boolean;
+  instanceId?: string;
 }
 
 export interface ChatRequest {
