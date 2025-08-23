@@ -1,18 +1,7 @@
 name: Build Cross-Platform
 
 on:
-  push:
-    paths:
-      - .github/workflows/build.yml
-      - src/**
-      - src-tauri/**
-      - package.json
-  pull_request:
-    paths:
-      - .github/workflows/build.yml
-      - src/**
-      - src-tauri/**
-      - package.json
+  workflow_dispatch:
 
 jobs:
   build:
