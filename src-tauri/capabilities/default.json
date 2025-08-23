@@ -7,18 +7,18 @@
   ],
   "permissions": [
     "core:default",
-    "core:window:default",
-    "core:webview:default",
+    "window:default",
+    "webview:default",
     "dialog:default",
-    "core:menu:default",
-    "core:tray:default",
+    "menu:default",
+    "tray:default",
     "shell:default",
     "fs:default",
     "fs:read-all",
-    "core:path:default",
+    "path:default",
     "opener:default",
     "log:default",
     "store:default",
-    "core:window:allow-start-dragging"
+    "window:allow-start-dragging"
   ]
 }
