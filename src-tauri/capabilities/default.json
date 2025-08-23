@@ -1,5 +1,5 @@
 {
-  "$schema": "../gen/schemas/desktop-schema.json",
+  "$schema": "../node_modules/@tauri-apps/cli/schema/capabilities.schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
   "windows": [
@@ -7,14 +7,18 @@
   ],
   "permissions": [
     "core:default",
-    "core:window:allow-start-dragging",
-    "opener:default",
+    "core:window:default",
+    "core:webview:default",
     "dialog:default",
+    "core:menu:default",
+    "core:tray:default",
     "shell:default",
     "fs:default",
+    "fs:read-all",
+    "core:path:default",
+    "opener:default",
     "log:default",
-    "path:default",
     "store:default",
-    "single-instance:default"
+    "core:window:allow-start-dragging"
   ]
 }
