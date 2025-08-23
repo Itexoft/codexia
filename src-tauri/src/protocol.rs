@@ -129,6 +129,16 @@ pub enum EventMsg {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectionConfig {
+    #[serde(rename = "type")]
+    pub connection_type: String,
+    #[serde(default)]
+    pub host: String,
+    #[serde(default)]
+    pub user: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodexConfig {
     pub working_directory: String,
     pub model: String,
@@ -139,4 +149,5 @@ pub struct CodexConfig {
     pub sandbox_mode: String,
     pub codex_path: Option<String>,
     pub api_key: Option<String>,
+    pub connection: Option<ConnectionConfig>,
 }
