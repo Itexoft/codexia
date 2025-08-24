@@ -18,7 +18,6 @@ use config::{
     delete_profile, get_profile_config, get_project_name, get_provider_config, read_codex_config,
     read_mcp_servers, read_model_providers, read_profiles, update_profile_model,
 };
-use env_logger::Target;
 use filesystem::{
     directory_ops::{get_default_directories, read_directory},
     file_analysis::calculate_file_tokens,
@@ -28,19 +27,12 @@ use filesystem::{
     git_status::get_git_status,
 };
 use state::CodexState;
-use std::fs::OpenOptions;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let ctx = tauri::generate_context!();
-    init_logger(ctx.config().identifier.as_str());
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.set_focus();
-            }
-        }))
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(if cfg!(debug_assertions) {
@@ -55,6 +47,11 @@ pub fn run() {
                 ))
                 .build(),
         )
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
@@ -102,36 +99,4 @@ pub fn run() {
         ])
         .run(ctx)
         .expect("error while running tauri application");
-}
-
-fn init_logger(id: &str) -> std::path::PathBuf {
-    let mut dir = dirs::data_dir().unwrap();
-    dir.push(id);
-    std::fs::create_dir_all(&dir).ok();
-    let path = dir.join("codexia.log");
-    let file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-        .unwrap();
-    env_logger::Builder::new()
-        .target(Target::Pipe(Box::new(file)))
-        .filter_level(if cfg!(debug_assertions) {
-            log::LevelFilter::Debug
-        } else {
-            log::LevelFilter::Info
-        })
-        .try_init()
-        .ok();
-    path
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn log_file_created() {
-        let path = init_logger("milisp.codexia");
-        assert!(path.exists());
-    }
 }
