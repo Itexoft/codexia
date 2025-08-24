@@ -15,6 +15,17 @@
     "opener:default",
     "log:default",
     "store:default",
-    "core:window:allow-start-dragging"
+    "core:window:allow-start-dragging",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "system-ssh",
+          "cmd": "/usr/bin/ssh",
+          "args": true,
+          "sidecar": false
+        }
+      ]
+    }
   ]
 }
