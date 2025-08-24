@@ -1,5 +1,7 @@
 import { create } from "zustand"
 import { Store } from "@tauri-apps/plugin-store"
+import { appDataDir, join } from "@tauri-apps/api/path"
+import { remove } from "@tauri-apps/plugin-fs"
 
 export interface Instance {
   id: string
@@ -22,7 +24,18 @@ interface InstanceState {
   setActive: (id: string) => Promise<void>
 }
 
-const storePromise = Store.load("instances.store").catch(() => Store.load("instances.store", { defaults: {}, createNew: true }))
+const storePromise = (async () => {
+  try {
+    return await Store.load("instances.store")
+  } catch {
+    try {
+      const dir = await appDataDir()
+      const path = await join(dir, "instances.store")
+      await remove(path)
+    } catch {}
+    return Store.load("instances.store", { defaults: {}, createNew: true })
+  }
+})()
 
 export const useInstanceStore = create<InstanceState>((set, get) => ({
   instances: [],

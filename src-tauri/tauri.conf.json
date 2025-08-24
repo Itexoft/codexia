@@ -25,10 +25,7 @@
       }
     },
   "plugins": {
-    "shell": {
-      "open": true
-    },
-    "store": {},
+    "store": null,
     "singleInstance": {}
   },
   "bundle": {

@@ -4,10 +4,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Provider, useSettingsStore } from "@/stores/SettingsStore";
-import { appDataDir, join } from "@tauri-apps/api/path";
+import { appDataDir } from "@tauri-apps/api/path";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { exists, rename } from "@tauri-apps/plugin-fs";
-import { Store } from "@tauri-apps/plugin-store";
 import { invoke } from "@tauri-apps/api/core";
 
 export default function SettingsPage() {
@@ -30,22 +28,7 @@ export default function SettingsPage() {
   const [sshTest, setSshTest] = useState("");
   const [dataDir, setDataDir] = useState("");
   useEffect(() => {
-    appDataDir().then(async dir => {
-      setDataDir(dir)
-      const path = await join(dir, "instances.store")
-      try {
-        const store = await Store.load("instances.store")
-        await store.save()
-      } catch {
-        try {
-          if (await exists(path)) {
-            await rename(path, `${path}.bak`)
-          }
-        } catch {}
-        const store = await Store.load("instances.store", { defaults: {}, createNew: true })
-        await store.save()
-      }
-    })
+    appDataDir().then(setDataDir)
   }, [])
   const providerNames = [
     "openai",
