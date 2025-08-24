@@ -10,20 +10,22 @@
     "frontendDist": "../dist"
   },
   "app": {
-      "windows": [
-        {
-          "title": "Codexia - AI Chat Interface",
-          "width": 1200,
-          "height": 800,
-          "minWidth": 800,
-          "minHeight": 600
-        }
-      ],
-      "security": {
-        "csp": null,
-        "capabilities": ["default"]
+    "windows": [
+      {
+        "title": "Codexia - AI Chat Interface",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600
       }
-    },
+    ],
+    "security": {
+      "csp": null,
+      "capabilities": [
+        "default"
+      ]
+    }
+  },
   "plugins": {
     "store": null,
     "singleInstance": {}
@@ -37,6 +39,9 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "resources": {
+      "resources/askpass": "resources/askpass"
+    }
   }
 }

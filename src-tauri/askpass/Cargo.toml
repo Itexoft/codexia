@@ -1,0 +1,8 @@
+[package]
+name = "askpass"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "askpass"
+path = "src/main.rs"

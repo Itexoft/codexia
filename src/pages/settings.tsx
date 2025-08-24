@@ -4,9 +4,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Provider, useSettingsStore } from "@/stores/SettingsStore";
-import { appDataDir } from "@tauri-apps/api/path";
+import { appDataDir, resolveResource } from "@tauri-apps/api/path";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { invoke } from "@tauri-apps/api/core";
+import { Command } from "@tauri-apps/plugin-shell";
 
 export default function SettingsPage() {
   const {
@@ -25,6 +25,7 @@ export default function SettingsPage() {
   const [sshPort, setSshPort] = useState("");
   const [sshUser, setSshUser] = useState("");
   const [sshKeyPath, setSshKeyPath] = useState("");
+  const [sshPassword, setSshPassword] = useState("");
   const [sshTest, setSshTest] = useState("");
   const [dataDir, setDataDir] = useState("");
   useEffect(() => {
@@ -274,25 +275,34 @@ export default function SettingsPage() {
                     <label className="block mb-1 font-medium">User</label>
                     <Input value={sshUser} onChange={(e) => setSshUser(e.target.value)} />
                   </div>
-                  <div className="mb-4">
+                  <div className="mb-2">
                     <label className="block mb-1 font-medium">Key Path</label>
                     <Input value={sshKeyPath} onChange={(e) => setSshKeyPath(e.target.value)} />
+                  </div>
+                  <div className="mb-4">
+                    <label className="block mb-1 font-medium">Password</label>
+                    <Input type="password" value={sshPassword} onChange={(e) => setSshPassword(e.target.value)} />
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
                       onClick={async () => {
                         setSshTest("...");
                         try {
-                          const res = await invoke<string>("test_ssh_connection", {
-                            conn: {
-                              type: "ssh",
-                              host: sshHost,
-                              user: sshUser,
-                              port: sshPort ? Number(sshPort) : undefined,
-                              keyPath: sshKeyPath,
-                            },
-                          });
-                          setSshTest(res);
+                          const askpass = await resolveResource("resources/askpass");
+                          const env: Record<string, string> = { SSH_ASKPASS: askpass, SSH_ASKPASS_REQUIRE: "force" };
+                          if (sshPassword) env.APP_SSH_PASS = sshPassword;
+                          const args: string[] = [];
+                          if (sshPassword) {
+                            args.push("-o", "PreferredAuthentications=password", "-o", "KbdInteractiveAuthentication=no", "-o", "NumberOfPasswordPrompts=1", "-o", "StrictHostKeyChecking=accept-new", "-o", "UserKnownHostsFile=/dev/null");
+                          } else {
+                            args.push("-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=5");
+                            if (sshKeyPath) args.push("-i", sshKeyPath);
+                          }
+                          if (sshPort) args.push("-p", sshPort);
+                          const target = sshUser ? `${sshUser}@${sshHost}` : sshHost;
+                          args.push(target, "id");
+                          const out = await Command.create("system-ssh", args, { env }).execute();
+                          setSshTest(out.code === 0 ? "ok" : out.stderr);
                         } catch (e) {
                           setSshTest(String(e));
                         }
