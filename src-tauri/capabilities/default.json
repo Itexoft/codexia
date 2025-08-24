@@ -16,7 +16,6 @@
     "log:default",
     "store:default",
     "core:window:allow-start-dragging",
-    "shell:default",
     {
       "identifier": "shell:allow-execute",
       "allow": [
