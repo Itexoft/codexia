@@ -5,8 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Provider, useSettingsStore } from "@/stores/SettingsStore";
 import { appDataDir } from "@tauri-apps/api/path";
-import { openPath } from "@tauri-apps/plugin-opener";
-import { Store } from "@tauri-apps/plugin-store";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { invoke } from "@tauri-apps/api/core";
 
 export default function SettingsPage() {
@@ -29,16 +28,7 @@ export default function SettingsPage() {
   const [sshTest, setSshTest] = useState("");
   const [dataDir, setDataDir] = useState("");
   useEffect(() => {
-    appDataDir().then(async dir => {
-      setDataDir(dir)
-      try {
-        const store = await Store.load("instances.store")
-        await store.save()
-      } catch {
-        const store = await Store.load("instances.store", { defaults: {}, createNew: true })
-        await store.save()
-      }
-    })
+    appDataDir().then(setDataDir)
   }, [])
   const providerNames = [
     "openai",
@@ -322,10 +312,10 @@ export default function SettingsPage() {
           <Button
             size="sm"
             onClick={() => {
-              openPath(dataDir);
+              revealItemInDir(dataDir);
             }}
           >
-            Open
+            Reveal in Finder
           </Button>
         </div>
       </div>

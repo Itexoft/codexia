@@ -15,19 +15,48 @@ pub struct SshProcess;
 impl SshProcess {
     #[cfg(target_os = "macos")]
     pub fn spawn(config: &CodexConfig) -> Result<ProcessHandle> {
-        let conn = config.connection.as_ref().ok_or_else(|| anyhow!("missing connection config"))?;
-        let target = if conn.user.is_empty() { conn.host.clone() } else { format!("{}@{}", conn.user, conn.host) };
+        let conn = config
+            .connection
+            .as_ref()
+            .ok_or_else(|| anyhow!("missing connection config"))?;
+        let target = if conn.user.is_empty() {
+            conn.host.clone()
+        } else {
+            format!("{}@{}", conn.user, conn.host)
+        };
         let mut cmd = Command::new("/usr/bin/ssh");
-        cmd.arg("-T").arg("-o").arg("BatchMode=yes");
-        if let Some(port) = conn.port { cmd.arg("-p").arg(port.to_string()); }
-        if let Some(key) = &conn.key_path { if !key.is_empty() { cmd.arg("-i").arg(key); } }
+        cmd.arg("-T")
+            .arg("-o")
+            .arg("BatchMode=yes")
+            .arg("-o")
+            .arg("StrictHostKeyChecking=accept-new")
+            .arg("-o")
+            .arg("ConnectTimeout=5");
+        if let Some(port) = conn.port {
+            cmd.arg("-p").arg(port.to_string());
+        }
+        if let Some(key) = &conn.key_path {
+            if !key.is_empty() {
+                cmd.arg("-i").arg(key);
+            }
+        }
         cmd.arg(&target).arg("codex");
-        if let Some(args) = &config.custom_args { cmd.args(args); }
+        if let Some(args) = &config.custom_args {
+            cmd.args(args);
+        }
         cmd.arg("proto");
-        let mut child = cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
+        let mut child = cmd
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
         let stdin = child.stdin.take().ok_or_else(|| anyhow!("stdin"))?;
         let stdout = child.stdout.take().ok_or_else(|| anyhow!("stdout"))?;
-        Ok(ProcessHandle { child, stdin, stdout })
+        Ok(ProcessHandle {
+            child,
+            stdin,
+            stdout,
+        })
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -37,19 +66,46 @@ impl SshProcess {
 
     #[cfg(target_os = "macos")]
     pub async fn test_connection(conn: &ConnectionConfig) -> Result<String> {
-        let target = if conn.user.is_empty() { conn.host.clone() } else { format!("{}@{}", conn.user, conn.host) };
+        let target = if conn.user.is_empty() {
+            conn.host.clone()
+        } else {
+            format!("{}@{}", conn.user, conn.host)
+        };
         let mut cmd = Command::new("/usr/bin/ssh");
-        cmd.arg("-T").arg("-o").arg("BatchMode=yes");
-        if let Some(port) = conn.port { cmd.arg("-p").arg(port.to_string()); }
-        if let Some(key) = &conn.key_path { if !key.is_empty() { cmd.arg("-i").arg(key); } }
+        cmd.arg("-T")
+            .arg("-o")
+            .arg("BatchMode=yes")
+            .arg("-o")
+            .arg("StrictHostKeyChecking=accept-new")
+            .arg("-o")
+            .arg("ConnectTimeout=5");
+        if let Some(port) = conn.port {
+            cmd.arg("-p").arg(port.to_string());
+        }
+        if let Some(key) = &conn.key_path {
+            if !key.is_empty() {
+                cmd.arg("-i").arg(key);
+            }
+        }
         cmd.arg(&target).arg("echo").arg("ok");
-        let output = timeout(Duration::from_secs(5), cmd.output()).await.map_err(|_| anyhow!("timeout"))??;
+        let output = match timeout(Duration::from_secs(5), cmd.output()).await {
+            Err(_) => return Err(anyhow!("timeout")),
+            Ok(res) => res.map_err(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    anyhow!("ssh not found")
+                } else {
+                    anyhow!(e)
+                }
+            })?,
+        };
         if output.status.success() {
             let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if s == "ok" { return Ok(s); }
+            if s == "ok" {
+                return Ok(s);
+            }
         }
-        let err = String::from_utf8_lossy(&output.stderr).to_string();
-        if err.to_lowercase().contains("permission denied") {
+        let err = String::from_utf8_lossy(&output.stderr).to_lowercase();
+        if err.contains("permission denied") {
             Err(anyhow!("permission denied (publickey)"))
         } else {
             Err(anyhow!("host unreachable"))
