@@ -10,14 +10,29 @@ fn main() {
         fs::create_dir_all("resources").ok();
         let target = env::var("TARGET").unwrap();
         Command::new("cargo")
-            .args(["build", "--release", "--target", &target, "--manifest-path", "askpass/Cargo.toml"])
+            .args([
+                "build",
+                "--release",
+                "--target",
+                &target,
+                "--target-dir",
+                "target",
+                "--manifest-path",
+                "askpass/Cargo.toml",
+            ])
             .status()
             .unwrap();
         let arm = Path::new("target/aarch64-apple-darwin/release/askpass");
         let x86 = Path::new("target/x86_64-apple-darwin/release/askpass");
         if arm.exists() && x86.exists() {
             Command::new("lipo")
-                .args(["-create", "-output", "resources/askpass", arm.to_str().unwrap(), x86.to_str().unwrap()])
+                .args([
+                    "-create",
+                    "-output",
+                    "resources/askpass",
+                    arm.to_str().unwrap(),
+                    x86.to_str().unwrap(),
+                ])
                 .status()
                 .unwrap();
         } else {
